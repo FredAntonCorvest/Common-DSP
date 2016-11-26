@@ -1,4 +1,4 @@
-//  SvfLinearTrapOptimised2.h
+//  SvfLinearTrapOptimised2.hpp
 //
 //  Created by Fred Anton Corvest (FAC) on 26/11/2016.
 //
@@ -20,8 +20,8 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 
-#ifndef SvfLinearTrapOptimised2_h
-#define SvfLinearTrapOptimised2_h
+#ifndef SvfLinearTrapOptimised2_hpp
+#define SvfLinearTrapOptimised2_hpp
 
 /*!
  @class SvfLinearTrapOptimised2
@@ -144,4 +144,4 @@ private:
     double _ASqrt;
 };
 
-#endif /* SvfLinearTrapOptimised2_h */
+#endif /* SvfLinearTrapOptimised2_hpp */
