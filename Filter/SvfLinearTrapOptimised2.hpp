@@ -33,12 +33,12 @@ public:
     /*!
      @class SvfLinearTrapOptimised2
      @enum	FILTER_TYPE
-     @brief The different states of the filter. TODO: Needs to be completed with the missing type
+     @brief The different states of the filter.
      */
-    enum FLT_TYPE {LOW_PASS_FILTER, BAND_PASS_FILTER, HIGH_PASS_FILTER, LOW_SHELF_FILTER, NO_FLT_TYPE};
+    enum FLT_TYPE {LOW_PASS_FILTER, BAND_PASS_FILTER, HIGH_PASS_FILTER, NOTCH_FILTER, PEAK_FILTER, BELL_FILTER, LOW_SHELF_FILTER, HIGH_SHELF_FILTER, NO_FLT_TYPE};
     
     SvfLinearTrapOptimised2() {
-        _ic1eq = _ic2eq = _A = _ASqrt = _v1 = _v2 = _v3 = _a1 = _a2 = _a3 = _m0 = _m1 = _m2 = 0;
+        _ic1eq = _ic2eq = _v1 = _v2 = _v3 = 0;
     }
     
     /*!
@@ -47,8 +47,7 @@ public:
         Gain in dB to boost or cut the cutoff point of the Low shelf filter
      */
     void setGain(double gainDb) {
-        _A = pow(10.0, gainDb / 40.0);
-        _ASqrt = sqrt(_A);
+        _coef.setGain(gainDb);
     }
     
     /*!
@@ -62,49 +61,7 @@ public:
         Sample rate. Default value is 44100hz. Do not forget to call resetState before changing the sample rate
      */
     inline void updateCoefficients(double cutoff, double q = 0.5, FLT_TYPE type = LOW_PASS_FILTER, double sampleRate = 44100) {
-        double g = tan((cutoff / sampleRate) * M_PI);
-        double k = 1.f / q;
-        
-        switch (type) {
-            case LOW_PASS_FILTER:
-                _a1 = 1/(1 + g*(g + k));
-                _a2 = g*_a1;
-                _a3 = g*_a2;
-                _m0 = 0;
-                _m1 = 0;
-                _m2 = 1;
-                break;
-            case BAND_PASS_FILTER:
-                _a1 = 1/(1 + g*(g + k));
-                _a2 = g*_a1;
-                _a3 = g*_a2;
-                _m0 = 0;
-                _m1 = 1;
-                _m2 = 0;
-                break;
-            case HIGH_PASS_FILTER:
-                _a1 = 1/(1 + g*(g + k));
-                _a2 = g*_a1;
-                _a3 = g*_a2;
-                _m0 = 1;
-                _m1 = -k;
-                _m2 = -1;
-                break;
-            case LOW_SHELF_FILTER:
-                g /= _ASqrt;
-                _a1 = 1/(1 + g*(g + k));
-                _a2 = g*_a1;
-                _a3 = g*_a2;
-                _m0 = 1;
-                _m1 = k*(_A-1);
-                _m2 = _A*_A - 1;
-                break;
-            case NO_FLT_TYPE:
-                // nothing todo
-                break;
-            default:
-                assert(false);
-        }
+        _coef.update(cutoff, q, type, sampleRate);
     }
     
     /*!
@@ -122,24 +79,107 @@ public:
      */
     inline double tick(double v0) {
         _v3 = v0 - _ic2eq;
-        _v1 = _a1*_ic1eq + _a2*_v3;
-        _v2 = _ic2eq + _a2*_ic1eq + _a3*_v3;
+        _v1 = _coef._a1*_ic1eq + _coef._a2*_v3;
+        _v2 = _ic2eq + _coef._a2*_ic1eq + _coef._a3*_v3;
         _ic1eq = 2*_v1 - _ic1eq;
         _ic2eq = 2*_v2 - _ic2eq;
         
-        return _m0*v0 + _m1*_v1 + _m2*_v2;
+        return _coef._m0*v0 + _coef._m1*_v1 + _coef._m2*_v2;
     }
     
 private:
+    struct Coefficients {
+        Coefficients() {
+            _a1 = _a2 = _a3 = _m0 = _m1 = _m2 = 0;
+            _A = _ASqrt = 1;
+        }
+        
+        void update(double cutoff, double q = 0.5, SvfLinearTrapOptimised2::FLT_TYPE type = LOW_PASS_FILTER, double sampleRate = 44100) {
+            double g = tan((cutoff / sampleRate) * M_PI);
+            double k = computeK(q, type == BELL_FILTER /*USE GAIN FOR BELL FILTER ONLY*/);
+            
+            switch (type) {
+                case LOW_PASS_FILTER:
+                    computeA(g, k);
+                    _m0 = 0;
+                    _m1 = 0;
+                    _m2 = 1;
+                    break;
+                case BAND_PASS_FILTER:
+                    computeA(g, k);
+                    _m0 = 0;
+                    _m1 = 1;
+                    _m2 = 0;
+                    break;
+                case HIGH_PASS_FILTER:
+                    computeA(g, k);
+                    _m0 = 1;
+                    _m1 = -k;
+                    _m2 = -1;
+                    break;
+                case NOTCH_FILTER:
+                    computeA(g, k);
+                    _m0 = 1;
+                    _m1 = -k;
+                    _m2 = 0;
+                    break;
+                case PEAK_FILTER:
+                    computeA(g, k);
+                    _m0 = 1;
+                    _m1 = -k;
+                    _m2 = -2;
+                    break;
+                case BELL_FILTER:
+                    computeA(g, k);
+                    _m0 = 1;
+                    _m1 = k*(_A*_A - 1);
+                    _m2 = 0;
+                    break;
+                case LOW_SHELF_FILTER:
+                    computeA(g /= _ASqrt, k);
+                    _m0 = 1;
+                    _m1 = k*(_A-1);
+                    _m2 = _A*_A - 1;
+                    break;
+                case HIGH_SHELF_FILTER:
+                    computeA(g *= _ASqrt, k);
+                    _m0 = _A*_A;
+                    _m1 = k*(1-_A)*_A;
+                    _m2 = 1-_A*_A;
+                    break;
+                case NO_FLT_TYPE:
+                    // nothing todo
+                    break;
+                default:
+                    assert(false);
+            }
+        }
+        
+        void setGain(double gainDb) {
+            _A = pow(10.0, gainDb / 40.0);
+            _ASqrt = sqrt(_A);
+        }
+        
+        double computeK(double q, bool useGain=false) {
+            return 1.f / (useGain ? (q*_A) : q);
+        }
+        
+        void computeA(double g, double k) {
+            _a1 = 1/(1 + g*(g + k));
+            _a2 = g*_a1;
+            _a3 = g*_a2;
+        }
+        
+        double _a1, _a2, _a3;
+        double _m0, _m1, _m2;
+        
+        double _A;
+        double _ASqrt;
+    } _coef;
+    
     double _ic1eq;
     double _ic2eq;
-    
     double _v1, _v2, _v3;
-    double _a1, _a2, _a3;
-    double _m0, _m1, _m2;
-    
-    double _A;
-    double _ASqrt;
 };
 
 #endif /* SvfLinearTrapOptimised2_hpp */

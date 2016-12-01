@@ -31,7 +31,7 @@
 /*!
  @brief Converts a given filter type to a file name
  @param type
-    Type of the filter
+ Type of the filter
  */
 std::string toFileName(SvfLinearTrapOptimised2::FLT_TYPE type) {
     switch (type) {
@@ -41,8 +41,16 @@ std::string toFileName(SvfLinearTrapOptimised2::FLT_TYPE type) {
             return "Data/SvfLinearTrapOptimised2_Bpf.wav";
         case SvfLinearTrapOptimised2::HIGH_PASS_FILTER:
             return "Data/SvfLinearTrapOptimised2_Hpf.wav";
+        case SvfLinearTrapOptimised2::NOTCH_FILTER:
+            return "Data/SvfLinearTrapOptimised2_Notch.wav";
+        case SvfLinearTrapOptimised2::PEAK_FILTER:
+            return "Data/SvfLinearTrapOptimised2_Peak.wav";
+        case SvfLinearTrapOptimised2::BELL_FILTER:
+            return "Data/SvfLinearTrapOptimised2_Bell.wav";
         case SvfLinearTrapOptimised2::LOW_SHELF_FILTER:
             return "Data/SvfLinearTrapOptimised2_Lsf.wav";
+        case SvfLinearTrapOptimised2::HIGH_SHELF_FILTER:
+            return "Data/SvfLinearTrapOptimised2_Hsf.wav";
         case SvfLinearTrapOptimised2::NO_FLT_TYPE:
             return "Data/SvfLinearTrapOptimised2_Dry.wav";
         default:
