@@ -24,6 +24,10 @@ This example is for educational purposes only, I've tried to gather various DSP 
 * :sound: [SvfLinearTrapOptimised2_Lsf.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Lsf.wav)
 * :sound: [SvfLinearTrapOptimised2_Hsf.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Hsf.wav)
 
+#### Build/Execution instruction:
+    g++ SvfLinearTrapOptimised2Demo.cpp -o SvfLinearTrapOptimised2Demo
+    ./SvfLinearTrapOptimised2Demo
+
 ### WaveFileWriter
 
 Quick & dirty wave file - This code snippet comes from an example on wavetable oscillator written by Nigel Redmon on 4/31/12
