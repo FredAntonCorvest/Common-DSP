@@ -25,7 +25,6 @@ This example is for educational purposes only, I've tried to gather various DSP 
 ### WaveFileWriter
 
 Quick & dirty wave file - This code snippet comes from an example on wavetable oscillator written by Nigel Redmon on 4/31/12
-Available here www.earlevel.com/main/2012/05/03/a-wavetable-oscillator—introduction/
 Check his blog! An amazing source of information/example about DSP. Thanks Nigel!
 
 Modification 30/11/2016: (Fred Anton Corvest) Add filename and sampleRate parameters to writeFloatSound method
