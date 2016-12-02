@@ -35,7 +35,7 @@ public:
      @enum	FILTER_TYPE
      @brief The different states of the filter.
      */
-    enum FLT_TYPE {LOW_PASS_FILTER, BAND_PASS_FILTER, HIGH_PASS_FILTER, NOTCH_FILTER, PEAK_FILTER, BELL_FILTER, LOW_SHELF_FILTER, HIGH_SHELF_FILTER, NO_FLT_TYPE};
+    enum FLT_TYPE {LOW_PASS_FILTER, BAND_PASS_FILTER, HIGH_PASS_FILTER, NOTCH_FILTER, PEAK_FILTER, ALL_PASS_FILTER, BELL_FILTER, LOW_SHELF_FILTER, HIGH_SHELF_FILTER, NO_FLT_TYPE};
     
     SvfLinearTrapOptimised2() {
         _ic1eq = _ic2eq = _v1 = _v2 = _v3 = 0;
@@ -128,6 +128,12 @@ private:
                     _m0 = 1;
                     _m1 = -k;
                     _m2 = -2;
+                    break;
+                case ALL_PASS_FILTER:
+                    computeA(g, k);
+                    _m0 = 1;
+                    _m1 = -2*k;
+                    _m2 = 0;
                     break;
                 case BELL_FILTER:
                     computeA(g, k);

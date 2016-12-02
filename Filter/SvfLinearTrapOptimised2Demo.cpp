@@ -45,6 +45,8 @@ std::string toFileName(SvfLinearTrapOptimised2::FLT_TYPE type) {
             return "Data/SvfLinearTrapOptimised2_Notch.wav";
         case SvfLinearTrapOptimised2::PEAK_FILTER:
             return "Data/SvfLinearTrapOptimised2_Peak.wav";
+        case SvfLinearTrapOptimised2::ALL_PASS_FILTER:
+            return "Data/SvfLinearTrapOptimised2_All.wav";
         case SvfLinearTrapOptimised2::BELL_FILTER:
             return "Data/SvfLinearTrapOptimised2_Bell.wav";
         case SvfLinearTrapOptimised2::LOW_SHELF_FILTER:

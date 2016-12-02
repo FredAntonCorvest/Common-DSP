@@ -20,6 +20,7 @@ This example is for educational purposes only, I've tried to gather various DSP 
 * :sound: [SvfLinearTrapOptimised2_Hpf.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Hpf.wav)
 * :sound: [SvfLinearTrapOptimised2_Notch.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Notch.wav)
 * :sound: [SvfLinearTrapOptimised2_Peak.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Peak.wav)
+* :sound: [SvfLinearTrapOptimised2_All.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_All.wav)
 * :sound: [SvfLinearTrapOptimised2_Bell.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Bell.wav)
 * :sound: [SvfLinearTrapOptimised2_Lsf.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Lsf.wav)
 * :sound: [SvfLinearTrapOptimised2_Hsf.wav](https://github.com/FredAntonCorvest/Common-DSP/blob/master/Filter/Data/SvfLinearTrapOptimised2_Hsf.wav)
