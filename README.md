@@ -29,6 +29,10 @@ This example is for educational purposes only, I've tried to gather various DSP 
     g++ SvfLinearTrapOptimised2Demo.cpp -o SvfLinearTrapOptimised2Demo
     ./SvfLinearTrapOptimised2Demo
 
+### FacSawOsc
+
+Provides a basic Saw oscillator (aliasing-free)
+
 ### WaveFileWriter
 
 Quick & dirty wave file - This code snippet comes from an example on wavetable oscillator written by Nigel Redmon on 4/31/12

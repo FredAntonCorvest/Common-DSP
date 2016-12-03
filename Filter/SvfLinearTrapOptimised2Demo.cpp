@@ -23,6 +23,7 @@
 #include <math.h>
 #include <assert.h>
 #include "../Utils/WaveFileWriter.h"
+#include "../Osc/FacSawOsc.hpp"
 #include "SvfLinearTrapOptimised2.hpp"
 
 #define PI2 (M_PI*2)
@@ -89,10 +90,8 @@ float* createSaw(int nbSamples, float pitchHz, float leveldB, SvfLinearTrapOptim
     float cutoffRatio = 1.0 + (log(stopCutoffHz) -  log(cutoff)) / (float)nbSamples;
     // Exponential cutoff sweep from start to end
     
-    float normalisedFreq = pitchHz / (float)sampleRate;
-    float phaseIncr = normalisedFreq * PI2;
-    float phase = 0.f;
-    // Normalisation of the pitch + setting of the increment and start phase
+    FacSawOsc sawOsc;
+    sawOsc.setFrequency(pitchHz, sampleRate);
     
     SvfLinearTrapOptimised2 filter;
     filter.setGain(gaindB);
@@ -105,26 +104,7 @@ float* createSaw(int nbSamples, float pitchHz, float leveldB, SvfLinearTrapOptim
     // Conversion of the level from decibel to linear
     
     for (int i = 0; i < nbSamples; i ++) {
-        float t = phase / PI2;
-        float oscSmp = (2.f * t) - 1.f;
-        // Creates an aliased saw waverform
-        
-        float polyBlep = 0.f;
-        if (t < normalisedFreq) {
-            t /= normalisedFreq;
-            polyBlep = t+t - t*t - 1.f;
-        } else if (t > 1.f - normalisedFreq) {
-            t = (t - 1.f) / normalisedFreq;
-            polyBlep = t*t + t+t + 1.f;
-        }
-        // Computation of the polyblep
-        
-        oscSmp -= polyBlep;
-        // Layer of the poly blep on top of the aliased waveforme (Remove the aliasing)
-        
-        phase += phaseIncr;
-        phase = phase >= PI2 ? phase-PI2 : phase;
-        // phase increment + wrapping
+        float oscSmp = sawOsc.tick();
         
         filter.updateCoefficients(cutoff, Q, filterType, sampleRate);
         // Updates the coefficients of the filter for the given cutoff, q, type and sample rate
