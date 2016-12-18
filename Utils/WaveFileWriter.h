@@ -41,9 +41,7 @@ inline void write2Bytes(uint32_t val, uint8_t **bytePtr) {
     *(*bytePtr)++ = val >> 8;
 }
 
-void writeFloatSound(int len, float *wave, std::string& filenName, int sampleRate) {
-    const int numChannels = 1;
-    
+void writeFloatSound(int len, float *wave, std::string& filenName, int sampleRate, int numChannels = 1) {
     // build file
     const int bytesPersample = 4;
     const int soundChunkLen = len * bytesPersample;
@@ -67,7 +65,7 @@ void writeFloatSound(int len, float *wave, std::string& filenName, int sampleRat
     write4Bytes(4, &bytePtr);                               // size of subchunk that follows
     write4Bytes(numChannels * len, &bytePtr);               // size of subchunk that follows
     writeFourCC(0x64617461/*'data'*/, &bytePtr);
-    write4Bytes(len * numChannels * bytesPersample, &bytePtr); // subchunk size
+    write4Bytes(soundChunkLen, &bytePtr);                   // subchunk size
     
     // write array to file
     FILE *pFile;
