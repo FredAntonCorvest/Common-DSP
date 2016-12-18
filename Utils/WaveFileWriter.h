@@ -6,6 +6,7 @@
 
 // Modification 30/11/2016: (Fred Anton Corvest) Add filename and sampleRate parameters to writeFloatSound method
 // Modification 01/12/2016: (Fred Anton Corvest) Remove warning: multi-character character constant
+// Modification 18/12/2016: (Fred Anton Corvest) Add stereo support
 
 //
 // quick & dirty wave file
