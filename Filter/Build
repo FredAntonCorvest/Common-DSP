@@ -1,0 +1,4 @@
+#! /bin/bash
+echo BUILD
+g++ SvfLinearTrapOptimised2Demo.cpp -o SvfLinearTrapOptimised2Demo
+./SvfLinearTrapOptimised2Demo

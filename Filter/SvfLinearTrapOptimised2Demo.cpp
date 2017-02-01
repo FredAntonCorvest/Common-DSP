@@ -23,7 +23,7 @@
 #include <math.h>
 #include <assert.h>
 #include "../Utils/WaveFileWriter.h"
-#include "../Osc/FacSawOsc.hpp"
+#include "../Osc/FacOsc.hpp"
 #include "SvfLinearTrapOptimised2.hpp"
 
 #define PI2 (M_PI*2)
@@ -90,8 +90,9 @@ float* createSaw(int nbSamples, float pitchHz, float leveldB, SvfLinearTrapOptim
     float cutoffRatio = 1.0 + (log(stopCutoffHz) -  log(cutoff)) / (float)nbSamples;
     // Exponential cutoff sweep from start to end
     
-    FacSawOsc sawOsc;
-    sawOsc.setFrequency(pitchHz, sampleRate);
+    FacOsc osc;
+    osc.setType(FacOsc::SAW);
+    osc.setFrequency(pitchHz, sampleRate);
     
     SvfLinearTrapOptimised2 filter;
     filter.setGain(gaindB);
@@ -104,7 +105,7 @@ float* createSaw(int nbSamples, float pitchHz, float leveldB, SvfLinearTrapOptim
     // Conversion of the level from decibel to linear
     
     for (int i = 0; i < nbSamples; i ++) {
-        float oscSmp = sawOsc.tick();
+        float oscSmp = osc.tick();
         
         filter.updateCoefficients(cutoff, Q, filterType, sampleRate);
         // Updates the coefficients of the filter for the given cutoff, q, type and sample rate

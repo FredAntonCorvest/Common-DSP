@@ -1,4 +1,4 @@
-//  FacSawOsc.hpp
+//  FacOsc.hpp
 //
 //  Created by Fred Anton Corvest (FAC) on 03/12/2016.
 //
@@ -24,16 +24,29 @@
 #define PI2 (M_PI*2)
 
 /*!
- @class FacSawOsc
- @brief Saw oscillator (aliasing-free)
+ @class FacOsc
+ @brief Oscillator (aliasing-free)
  */
-class FacSawOsc {
+class FacOsc {
 public:
-    FacSawOsc() : _phase(0), _phaseIncr(0), _normalisedFreq(0) {
+    enum OSC_TYPE {
+        SIN, SAW
+    };
+    
+    FacOsc() : _phase(0), _phaseIncr(0), _normalisedFreq(0), _oscType(SIN) {
     }
     
     /*!
-     @class FacSawOsc
+     @class FacOsc
+     @param type
+     Type of the oscillator (SIN or SAW)
+     */
+    void setType(OSC_TYPE type) {
+        _oscType = type;
+    }
+    
+    /*!
+     @class FacOsc
      @param freq
         Frequency of the oscillator
      @param sr
@@ -46,7 +59,7 @@ public:
     }
     
     /*!
-     @class FacSawOsc
+     @class FacOsc
      @brief Resets osc phase
      */
     void reset() {
@@ -54,26 +67,38 @@ public:
     }
     
     /*!
-     @class FacSawOsc
+     @class FacOsc
      @brief Tick method
      */
     inline double tick() {
-        double t = _phase / PI2;
-        double oscSmp = (2.f * t) - 1.f;
-        // Creates an aliased saw waverform
+        double oscSmp = 0;
         
-        double polyBlep = 0.f;
-        if (t < _normalisedFreq) {
-            t /= _normalisedFreq;
-            polyBlep = t+t - t*t - 1.f;
-        } else if (t > 1.f - _normalisedFreq) {
-            t = (t - 1.f) / _normalisedFreq;
-            polyBlep = t*t + t+t + 1.f;
+        switch (_oscType) {
+            case SIN:
+                oscSmp = sin(_phase);
+                break;
+            case SAW: {
+                double t = _phase / PI2;
+                oscSmp = (2.f * t) - 1.f;
+                // Creates an aliased saw waverform
+                
+                double polyBlep = 0.f;
+                if (t < _normalisedFreq) {
+                    t /= _normalisedFreq;
+                    polyBlep = t+t - t*t - 1.f;
+                } else if (t > 1.f - _normalisedFreq) {
+                    t = (t - 1.f) / _normalisedFreq;
+                    polyBlep = t*t + t+t + 1.f;
+                }
+                // Computation of the polyblep
+                
+                oscSmp -= polyBlep;
+                // Layer of the poly blep on top of the aliased waveforme (Remove the aliasing)
+                }
+                break;
+            default:
+                assert(false);
         }
-        // Computation of the polyblep
-        
-        oscSmp -= polyBlep;
-        // Layer of the poly blep on top of the aliased waveforme (Remove the aliasing)
         
         _phase += _phaseIncr;
         _phase = _phase >= PI2 ? _phase-PI2 : _phase;
@@ -86,4 +111,5 @@ private:
     double _normalisedFreq;
     double _phaseIncr;
     double _phase;
+    OSC_TYPE _oscType;
 };
