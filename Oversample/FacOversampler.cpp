@@ -31,6 +31,7 @@
 #include "../Utils/WaveFileWriter.h"
 #include "../Osc/FacOsc.hpp"
 #include "FacPolyphaseFilters.h"
+#include "StOversampler4x.hpp"
 
 float mPFilterBranch[mNumBranches];
 
@@ -66,7 +67,7 @@ void interpolate(float *input, float *output, const int inSamples) {
         z[0] = input[i];
         
         for(j = 0; j < mNumBranches; ++j) {
-            mPFilterBranch[j] = processUpsample(z, j) * mNumBranches;
+            mPFilterBranch[j] = processUpsample(z, j) * 2.7; // 2.7 for 4 -> TEST!!!! old version -> mNumBranches;
         }
         
         for(n = 0; n < mNumBranches; ++n) {
@@ -97,9 +98,13 @@ void decimate(float *input, float *output, const int inSamples) {
     }
 }
 
+double waveShaper(double input) {
+    return atan(input) * .5 * M_PI;
+}
+
 void fx(float* input, int inSamples) {
     for(int i =0; i < inSamples; ++i) {
-        input[i] = atan(input[i]) * .5 * M_PI; // Wave Shaper
+        input[i] = waveShaper(input[i]) ;
     }
 }
 
@@ -108,7 +113,7 @@ int main(void) {
     int nbSamples = SR * durationSec; // Computes nb of samples (SR)
     int nbUpSamples = TARGET_SR * durationSec; // Computes nb of samples (TARGET_SR)
     
-    printf("FACOversampler TEST: SR %d to %d (%dx)\n", SR, TARGET_SR, mNumBranches);
+    printf("FACOversampler TEST: SR %d (%d smp) to %d (%d smp) (%dx)\n", SR, nbSamples, TARGET_SR, nbUpSamples, mNumBranches);
     
     float* input = new float[nbSamples];
     float* outputUp = new float[nbUpSamples];
@@ -117,9 +122,21 @@ int main(void) {
     FacOsc osc;
     osc.setFrequency(10000, SR);
     
+    StOversampler4x oversampler4x;
+    
+    float* inOver4x = new float[nbSamples];
+    float gain = pow(10.0, -6 / 20.0); // in -6db
+    
     for (int i = 0; i < nbSamples; i++) {
-        input[i] = osc.tick();
+        float xIn = osc.tick() * gain;
+        inOver4x[i] = oversampler4x.process(xIn, &waveShaper);
+        input[i] = xIn;
     }
+    
+    std::string fileNameInOver4x = "Data/in-over-4x-out.wav";
+    writeFloatSound(nbSamples, inOver4x, fileNameInOver4x, SR);
+    
+    delete [] inOver4x;
     
     std::string fileNameInDry = "Data/in-out.wav";
     writeFloatSound(nbSamples, input, fileNameInDry, SR);
