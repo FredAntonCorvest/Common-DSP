@@ -23,9 +23,11 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 
+#include "SaultFirFilter.h"
+
 /*!
  @class StOversampler4x
- @brief Quarterband filter (31 tap) - Fixed coefs
+ @brief Quarterband filter (31 tap)
  */
 class StOversampler4x {
 public:
@@ -54,30 +56,43 @@ public:
     
     /*!
      @class StOversampler4x
+     @brief Experimental - add aliasing by itself
+     */
+    double process2x(StOversampler4x& other, double x, processFuncDef processFunc) {
+        other.up4(x);
+        other.y3 = process(other.y3, processFunc);
+        other.y2 = process(other.y2, processFunc);
+        other.y1 = process(other.y1, processFunc);
+        other.y0 = process(other.y0, processFunc);
+        return other.down4();
+    }
+    
+    /*!
+     @class StOversampler4x
      @brief reset states
      */
     void reset() {
-        y30 = y29 = y28 = y27 = y26 = y25 = y24 = y23 = y22 = y21 = y20 = y19 = y17 = y16 = y15 = y14 = y13 = y12 = y11 = y10 = y9 = y8 = y7 = y6 = y5 = y4 = y3 = y2 = y1 = y0 = x0 = x1 = x2 = x3 = x4 = x5 = x6 = x7 = x8 = x9 = 0;
+        y30 = y29 = y28 = y27 = y26 = y25 = y24 = y23 = y22 = y21 = y20 = y19 = y17 = y16 = y15 = y14 = y13 = y12 = y11 = y10 = y9 = y8 = y7 = y6 = y5 = y4 = y3 = y2 = y1 = y0 = x0 = x1 = x2 = x3 = x4 = x5 = x6 = x7 = 0;
     }
     
 private:
-    double y30, y29, y28, y27, y26, y25, y24, y23, y22, y21, y20, y19, y18, y17, y16, y15, y14, y13, y12, y11, y10, y9,  y8, y7, y6, y5, y4, y3, y2, y1, y0, x0, x1, x2, x3, x4, x5, x6, x7, x8, x9;
+    double y30, y29, y28, y27, y26, y25, y24, y23, y22, y21, y20, y19, y18, y17, y16, y15, y14, y13, y12, y11, y10, y9,  y8, y7, y6, y5, y4, y3, y2, y1, y0, x0, x1, x2, x3, x4, x5, x6, x7;
     
     void up4(double x) {
         x7 = x6; x6 = x5; x5 = x4; x4 = x3; x3 = x2; x2 = x1; x1 = x0;
-        //  x0 = x * 4.0189;
-        x0 = x * 4;
+        x0 = x * 4; // gain compensation
         
         this->os4();
         
-        y0 = -0.0025*x0 + 0.0079*x1 - 0.0224*x2 + 0.0703*x3 + 0.2235*x4 - 0.0375*x5 + 0.0135*x6 - 0.0043*x7;
-        y1 = -0.0045*(x0 + x7) + 0.0147*(x1 + x6) - 0.0407*(x2 + x5) + 0.1546*(x3 + x4);
-        y2 = -0.0043*x0 + 0.0135*x1 - 0.0375*x2 + 0.2235*x3 + 0.0703*x4 - 0.0224*x5 + 0.0079*x6 - 0.0025*x7;
-        y3 = x3*0.25;
+        y0 = C1*x0        + C5*x1        + C9*x2         + C13*x3  + C17*x4 + C21*x5 + C25*x6 + C29*x7;
+        y1 = C2*(x0 + x7) + C6*(x1 + x6) + C10*(x2 + x5) + C14*(x3 + x4);
+        y2 = C3*x0        + C7*x1        + C11*x2        + C15*x3  + C19*x4 + C23*x5 + C27*x6 + C31*x7;
+        y3 = x3*C16;
     }
     
     double down4() {
-        return -0.0025*( y0+y30) - 0.0045*( y1+y29) - 0.0043*( y2+y28) + 0.0079*( y4+y26) + 0.0147*( y5+y25) + 0.0135*( y6+y24) + -0.0224*( y8+y22) - 0.0407*( y9+y21) - 0.0375*(y10+y20) + 0.0703*(y12+y18) + 0.1546*(y13+y17) + 0.2235*(y14+y16) + 0.25*y15;
+        return C1 *(y0+y30) + C2 *(y1+y29)  + C3 *(y2+y28)  + C5 *(y4+y26)  + C6 *(y5+y25)  + C7 *(y6+y24) + C9*(y8+y22) +
+               C10*(y9+y21) + C11*(y10+y20) + C13*(y12+y18) + C14*(y13+y17) + C15*(y14+y16) + C16*y15;
     }
     
     void os4() {
@@ -87,6 +102,6 @@ private:
         y18 = y14; y17 = y13; y16 = y12; y15 = y11;
         y14 = y10; y13 =  y9; y12 =  y8; y11 =  y7;
         y10 =  y6;  y9 =  y5;  y8 =  y4;  y7 =  y3;
-        y6 =  y2;  y5 =  y1;  y4 =  y0;
+        y6  =  y2;  y5 =  y1;  y4 =  y0;
     };
 };
