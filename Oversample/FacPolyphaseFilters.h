@@ -3,11 +3,12 @@
  Pass band ripple 5.000000e-01 Stop band ripple 70 */
 
 
-#define SR 44100
-#define TARGET_SR 176400
+//#define SR 44100
+//#define TARGET_SR 176400
 #define LENGTH 11
 #define mNumBranches 4 // oversampling
 #define mBranchOrder (int)(40 / (double)mNumBranches) + 1
+#define DC_GAIN 3.8606945702 // 4/sum(kernel)
 
 static const float KERNEL[mNumBranches][LENGTH] = {
 {//Branch #1

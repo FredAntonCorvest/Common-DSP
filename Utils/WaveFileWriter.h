@@ -42,7 +42,7 @@ inline void write2Bytes(uint32_t val, uint8_t **bytePtr) {
     *(*bytePtr)++ = val >> 8;
 }
 
-void writeFloatSound(int len, float *wave, std::string& filenName, int sampleRate, int numChannels = 1) {
+void writeFloatSound(int len, float *wave, const std::string& filenName, int sampleRate, int numChannels = 1) {
     // build file
     const int bytesPersample = 4;
     const int soundChunkLen = len * bytesPersample;

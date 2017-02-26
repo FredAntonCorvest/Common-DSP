@@ -1,0 +1,133 @@
+desc:sault/fac :: oversampler tester
+
+// WARNING!!!
+// THIS TEST MAY BE INACURATE OR COMPLETELY WRONG
+// DO NOT JUDGE THE ST OVERSAMPLER BASED ON THE RESULT PROVIDED BY THIS TEST!!!
+
+slider1:1000<20,20000,1>Freq (Hz)
+slider2:1<0,4,1{1x (none),2x(Up sampling only),4x(Up sampling only),2x-2x,4x-4x}> Filter to test
+slider3:15<1,100,1> Osc # harmonics
+slider4:0<0,2,1{ALL,ODD ONLY}> Osc harmonics
+slider5:0<0,2,1{Dry,Hard Clip, ATan WaveShaper}> Fx
+
+import st-oversampler.jsfx-inc
+
+@init
+osc.ph = 0;
+counter = 0;
+twopi = 2 * $pi;
+
+function Osc() instance(y,dt,ph,nbHarmonics,stepHarmonics) (
+  y = 0;
+  a = ph*twopi;
+  step = 1;
+  while (step <= nbHarmonics) (     
+    y += sin(a*step)/step;
+    step += stepHarmonics;    
+  ); 
+  ph += dt; 
+  ph >= 1 ? ph -= 1;
+  y;
+);
+
+function HardClip(x) (
+  abs(x) > .5 ? sign(x) * .5 : x;
+);
+
+function WaveShaper(x) (
+  atan(x) * .5 * $pi;
+);
+
+function FxChain(x)(
+  slider5 == 0 ? (
+    x;
+  ) :
+
+  slider5 == 1 ? ( 
+    HardClip(x);
+  ) :
+  
+  slider5 == 2 ? ( 
+    WaveShaper(x);
+  );  
+);
+
+@slider
+
+factor = slider2 == 0 || slider2 >= 3 ? 1 : 1 / (slider2*2);
+osc.sr = srate*factor;
+osc.dt = slider1/osc.sr;
+osc.nbHarmonics = slider3;
+osc.stepHarmonics = slider4+1;
+
+@sample
+
+slider2 == 0 ? (
+  spl0 = spl1 = FxChain(osc.Osc());
+  counter = 0;
+  );
+
+slider2 == 1 ? (
+
+  counter == 0 ? (
+    os0.os_up2( osc.Osc(); );
+    spl0 = spl1 = FxChain(os0.y1);
+    ) : (
+    spl0 = spl1 = FxChain(os0.y0);
+    );
+
+    counter += 1;
+    counter >= 2 ? counter = 0;
+    );
+
+slider2 == 2 ? (
+
+  counter == 0 ? (
+    os1.os_up2( osc.Osc() );
+
+    os2.os_up2( os1.y1 );
+    os3.os_up2( os1.y0 );
+
+    spl0 = spl1 = FxChain(os2.y0);
+    );
+
+  counter == 1 ? ( spl0 = spl1 = FxChain(os2.y1); );
+  counter == 2 ? ( spl0 = spl1 = FxChain(os3.y0); );
+  counter == 3 ? ( spl0 = spl1 = FxChain(os3.y1); );
+
+  counter += 1;
+  counter >= 4 ? counter = 0;
+  );
+  
+slider2 == 3 ? (
+
+  os0.os_up2( osc.Osc(); );
+  os0.y1 = FxChain(os0.y1);
+  os0.y0 = FxChain(os0.y0);
+  spl0 = spl1 = os0.os_down2();
+
+  );
+  
+slider2 == 4 ? (
+
+  os4.os_up4( osc.Osc(); );
+  os4.y3 = FxChain(os4.y3);
+  os4.y2 = FxChain(os4.y2);
+  os4.y1 = FxChain(os4.y1);
+  os4.y0 = FxChain(os4.y0);  
+  spl0 = spl1 = os4.os_down4();
+
+  );
+  
+@gfx 640 100
+gfX_r=gfx_g=gfx_b=1;
+gfx_x=gfx_y=4;
+gfx_printf("]Project SR: %dhz (Nyquist %dhz)\n", srate, srate*.5); gfx_y+=2;
+osc.sr != srate ? (
+  gfX_r=1;gfx_g=.5;gfx_b=0;
+  gfx_printf("]Osc SR: %dhz (Nyquist %dhz)\n", osc.sr, osc.sr*.5); gfx_y+=2;
+);
+maxHarmonics = osc.nbHarmonics%2 == 0 && slider4 == 1 ? osc.nbHarmonics -1 : osc.nbHarmonics;
+maxFreq =  maxHarmonics*slider1;
+maxFreq >= srate*factor*.5 ? (gfX_r=1;gfx_g=gfx_b=0;) : (gfX_r=0;gfx_g=1;gfx_b=0;);
+gfx_printf("]Osc Freq Range: %dhz to %dhz\n", slider1, maxFreq);

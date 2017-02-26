@@ -1,11 +1,8 @@
 //  FacOversampleTest.hpp
 //
-//  Created by Fred Anton Corvest (FAC) on 01/01/2017.
+//  Created by Fred Anton Corvest (FAC) on 01/01/2017
 //
-//  THIS IS FOR DEMO PURPOSE ONLY!
-//
-//  Code originaly written by Christian Floisand from
-//  https://christianfloisand.wordpress.com/2013/01/28/audio-resampling-part-2/
+//  THIS IS FOR TEST PURPOSE ONLY!
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a copy
 //  of this software and associated documentation files (the "Software"), to deal
@@ -30,133 +27,278 @@
 #include <assert.h>
 #include "../Utils/WaveFileWriter.h"
 #include "../Osc/FacOsc.hpp"
-#include "FacPolyphaseFilters.h"
+#include "FacPolyphase.hpp"
+#include "StOversampler2x.hpp"
 #include "StOversampler4x.hpp"
+#include "Factor2Filter.hpp"
+#include "Factor4Filter.hpp"
 
-float mPFilterBranch[mNumBranches];
+enum FX_TYPE {NONE, HARD_CLIP, WAVESHAPER};
 
-inline float processUpsample(float* in, int pos) {
-    const float* mKernel = KERNEL[pos];
-    
-    float acc = 0;
-    for(int i = 0; i < LENGTH; ++i) {
-        acc += in[i] * mKernel[i];
-    }
-    return acc;
+template <typename T> int sgn(T val) {
+    return (T(0) < val) - (val < T(0));
 }
 
-inline float processDownsample(float in, int pos) {
-    const float* mKernel = KERNEL[pos];
-    
-    float acc = 0;
-    for(int i = 0; i < LENGTH; ++i) {
-        acc += in * mKernel[i];
-    }
-    return acc;
-}
-
-void interpolate(float *input, float *output, const int inSamples) {
-    assert(input != output);
-    int i,j,n = 0;
-    memset(&mPFilterBranch, 0, sizeof(float)*mNumBranches);
-    
-    float z[mBranchOrder];
-    memset(&z, 0, sizeof(float)*mBranchOrder);
-    
-    for(i =0; i <  inSamples; ++i) {
-        z[0] = input[i];
-        
-        for(j = 0; j < mNumBranches; ++j) {
-            mPFilterBranch[j] = processUpsample(z, j) * 2.7; // 2.7 for 4 -> TEST!!!! old version -> mNumBranches;
-        }
-        
-        for(n = 0; n < mNumBranches; ++n) {
-            output[i*mNumBranches+n] = mPFilterBranch[n];
-        }
-        
-        for(n = mBranchOrder-1; n > 0; --n) {
-            z[n] = z[n-1];
-        }
+float fxChain(FX_TYPE fxType, float in) {
+    switch (fxType) {
+        case HARD_CLIP:
+            return fabs(in) > .5 ? sgn(in) * .5 : in;
+        case WAVESHAPER:
+            return atan(in) * .5 * M_PI;
+        default:
+            return in;
     }
 }
 
-void decimate(float *input, float *output, const int inSamples) {
-    assert(input != output);
-    int i,j,n,M;
-    
-    memset(&mPFilterBranch, 0, sizeof(float)*mNumBranches);
-    
-    for(i = 0, M = 0; i <  inSamples; ++i, M+=mNumBranches) {
-        for(j = 0; j < mNumBranches; ++j) {
-            mPFilterBranch[j] = processDownsample(input[M], j);
-        }
-        
-        output[i] = mPFilterBranch[0];
-        for(n = 1; n < mNumBranches; ++n) {
-            output[i] += mPFilterBranch[n];
-        }
-    }
-}
-
-double waveShaper(double input) {
-    return atan(input) * .5 * M_PI;
-}
-
-void fx(float* input, int inSamples) {
+void fxChain(FX_TYPE fxType, float* input, int inSamples) {
     for(int i =0; i < inSamples; ++i) {
-        input[i] = waveShaper(input[i]) ;
+        input[i] = fxChain(fxType, input[i]) ;
     }
 }
 
-int main(void) {
-    float durationSec = 2; // Duration of the signal
-    int nbSamples = SR * durationSec; // Computes nb of samples (SR)
-    int nbUpSamples = TARGET_SR * durationSec; // Computes nb of samples (TARGET_SR)
+std::string buildOutputFile(int pos, const std::string& text, int sr, int factor) {
+    char buff[255];
+    snprintf(buff, sizeof(buff), "Data/%d-%s(%dhz-Factor%d).wav", pos, text.c_str(), sr, factor);
+    return buff;
+}
+
+int main(int argc,char *argv[]) {
+    int FACTOR = 2; // Default up sample factor
     
-    printf("FACOversampler TEST: SR %d (%d smp) to %d (%d smp) (%dx)\n", SR, nbSamples, TARGET_SR, nbUpSamples, mNumBranches);
+    if (argc > 1) {
+        int val = atoi(argv[1]);
+        FACTOR = val == 2 || val == 4 ? val : FACTOR;
+    }
     
-    float* input = new float[nbSamples];
-    float* outputUp = new float[nbUpSamples];
-    float* output = new float[nbSamples];
+    const int SR_IN = 44100; // Input sample rate
+    const int SR_OUT = SR_IN * FACTOR; // Output sample rate
+    FX_TYPE fxType = HARD_CLIP;
+    
+    const float DURATION_SEC = 4; // Duration of the signal
+    const int NB_SAMPLES_IN = SR_IN * DURATION_SEC; // Computes nb of samples (SR_IN)
+    const int NB_SAMPLES_OUT = SR_OUT * DURATION_SEC; // Computes nb of samples (SR_OUT)
+    
+    float endCutoff = SR_IN * .49; // End cutoff (Just below NYQUIST)
+    float cutoff = 1000; // Start cutoff
+    float cutoffRatio = 1.0 + (log(endCutoff) -  log(cutoff)) / (float)(NB_SAMPLES_IN * .5); // Cutoff ratio for sweep
+    
+    printf("] FAC oversampling test\n"); //===========================================================================
+    printf("] In SR %dhz -> %dx -> Out SR %dhz\n", SR_IN, FACTOR, SR_OUT);
+    printf("] Osc range %.2fhz to %.2fhz \n", cutoff, endCutoff);
     
     FacOsc osc;
-    osc.setFrequency(10000, SR);
+    osc.setFrequency(cutoff, SR_IN);
+    osc.setType(FacOsc::SIN);
     
-    StOversampler4x oversampler4x;
+    FacOsc lfo;
+    lfo.setType(FacOsc::SIN);
+    lfo.setFrequency(0.1, SR_OUT);
     
-    float* inOver4x = new float[nbSamples];
-    float gain = pow(10.0, -6 / 20.0); // in -6db
+    float* bufferOsc = new float[NB_SAMPLES_IN];
+    float* bufferUpSamp = new float[NB_SAMPLES_OUT];
+    float* bufferFilter = new float[NB_SAMPLES_OUT];
     
-    for (int i = 0; i < nbSamples; i++) {
-        float xIn = osc.tick() * gain;
-        inOver4x[i] = oversampler4x.process(xIn, &waveShaper);
-        input[i] = xIn;
+    StOversampler2x stOver2x;
+    StOversampler4x stOver4x;
+    
+    factor2Filter filter2x;
+    factor2Filter_init(&filter2x);
+    
+    factor4Filter filter4x;
+    factor4Filter_init(&filter4x);
+    
+    printf("] Feed signal into oversampler (up only)..."); //=========================================================
+    
+    for (int i = 0, idx = 0; i < NB_SAMPLES_OUT; i+=FACTOR, idx++) {
+        if (cutoff <= endCutoff) {
+           osc.setFrequency(cutoff, SR_IN);
+           cutoff *= cutoffRatio;
+        }
+        
+        float x = osc.tick();
+        
+        if (FACTOR == 2) {
+            stOver2x.up2(x);
+            bufferUpSamp[i] = stOver2x.y1;
+            bufferUpSamp[i+1] = stOver2x.y0;
+            
+            factor2Filter_put(&filter2x, x * FACTOR);
+            bufferFilter[i] = factor2Filter_get(&filter2x) ;
+            for(int a=1; a < FACTOR; ++a) {
+                factor2Filter_put(&filter2x, 0);
+                bufferFilter[i+a] = factor2Filter_get(&filter2x);
+            }
+            
+        } else if (FACTOR == 4) {
+            stOver4x.up4(x);
+            bufferUpSamp[i]   = stOver4x.y3;
+            bufferUpSamp[i+1] = stOver4x.y2;
+            bufferUpSamp[i+2] = stOver4x.y1;
+            bufferUpSamp[i+3] = stOver4x.y0;
+            
+            factor4Filter_put(&filter4x, x * FACTOR);
+            bufferFilter[i] = factor4Filter_get(&filter4x) ;
+            for(int a=1; a < FACTOR; ++a) {
+                factor4Filter_put(&filter4x, 0);
+                bufferFilter[i+a] = factor4Filter_get(&filter4x);
+            }
+   
+        }
+        
+        bufferOsc[idx] = x;
     }
     
-    std::string fileNameInOver4x = "Data/in-over-4x-out.wav";
-    writeFloatSound(nbSamples, inOver4x, fileNameInOver4x, SR);
+    writeFloatSound(NB_SAMPLES_IN, bufferOsc, buildOutputFile(0, "in-out", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(2, "in-ovSmpUp-out", SR_OUT, FACTOR), SR_OUT);
+    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(3, "in-filter-out", SR_OUT, FACTOR), SR_OUT);
     
-    delete [] inOver4x;
+    printf("done\n] Apply fx on up sampled signal..."); //============================================================
     
-    std::string fileNameInDry = "Data/in-out.wav";
-    writeFloatSound(nbSamples, input, fileNameInDry, SR);
+    for (int i = 0; i < NB_SAMPLES_OUT; i++) {
+        bufferFilter[i] = fxChain(fxType, bufferFilter[i]);
+        bufferUpSamp[i] = fxChain(fxType, bufferUpSamp[i]);
+    }
     
-    interpolate(input, outputUp, nbSamples); // SR -> TARGET_SR
+    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(4, "in-ovSmpUp-fx-out", SR_OUT, FACTOR), SR_OUT);
+    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(5, "in-filter-fx-out", SR_OUT, FACTOR), SR_OUT);
     
-    std::string fileNameOutDry = "Data/up-out.wav";
-    writeFloatSound(nbUpSamples, outputUp, fileNameOutDry, TARGET_SR);
+    printf("done\n] Feed signal into oversampler (up/down)..."); //===================================================
     
-    fx(outputUp, nbUpSamples);  // FX ON TARGET_SR
+    float* bufferOvSamp = new float[NB_SAMPLES_IN];
+    float* bufferOvSampFx = new float[NB_SAMPLES_IN];
     
-    std::string fileNameOut = "Data/up-fx-out.wav";
-    writeFloatSound(nbUpSamples, outputUp, fileNameOut, TARGET_SR);
+    stOver2x.reset();
+    stOver4x.reset();
     
-    decimate(outputUp, output, nbSamples);  // TARGET_SR -> SR
+    for (int i = 0; i < NB_SAMPLES_IN; i++) {
+        float in = bufferOsc[i];
+        
+        if (FACTOR == 2) {
+            stOver2x.up2(in);
+            bufferOvSamp[i] = stOver2x.down2();
+        } else if (FACTOR == 4) {
+            stOver4x.up4(in);
+            bufferOvSamp[i] = stOver4x.down4();
+        }
+    }
     
-    std::string fileNameIn = "Data/up-fx-down.wav";
-    writeFloatSound(nbSamples, output, fileNameIn, SR);
+    printf("done\n] Feed signal + fx into oversampler (up/down)..."); //==============================================
     
-    delete [] input;
+    stOver2x.reset();
+    stOver4x.reset();
+    
+    for (int i = 0; i < NB_SAMPLES_IN; i++) {
+        float in = bufferOsc[i];
+        
+        if (FACTOR == 2) {
+            stOver2x.up2(in);
+            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
+            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            bufferOvSampFx[i] = stOver2x.down2();
+        } else if (FACTOR == 4) {
+            stOver4x.up4(in);
+            stOver4x.y3 = fxChain(fxType, stOver4x.y3);
+            stOver4x.y2 = fxChain(fxType, stOver4x.y2);
+            stOver4x.y1 = fxChain(fxType, stOver4x.y1);
+            stOver4x.y0 = fxChain(fxType, stOver4x.y0);
+            bufferOvSampFx[i] = stOver4x.down4();
+        }
+    }
+    
+    writeFloatSound(NB_SAMPLES_IN, bufferOvSamp, buildOutputFile(1, "in-ovSmp-out", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_IN, bufferOvSampFx, buildOutputFile(6, "in-ovSmp-fx-out", SR_IN, FACTOR), SR_IN);
+    
+    delete [] bufferOsc;
+    delete [] bufferFilter;
+    delete [] bufferUpSamp;
+    delete [] bufferOvSamp;
+    delete [] bufferOvSampFx;
+    
+    float* outputUp = new float[NB_SAMPLES_OUT];
+    float* outputDown = new float[NB_SAMPLES_IN];
+    
+    bool testActive = FACTOR == mNumBranches;
+    
+    if (testActive) {
+        printf("done\n] Feed signal into oversampler (polyphase) (up only)..."); //===================================
+        interpolate(bufferOsc, outputUp, NB_SAMPLES_IN);
+        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(7, "in-ovSmpUp(poly)-out", SR_OUT, FACTOR), SR_OUT);
+        printf("done\n");
+    } else {
+        printf("done\n] Test on oversampler (polyphase) ignored. Factor is %d, NBand is %d\n", FACTOR, mNumBranches);
+    }
+    
+    if (testActive) {
+        printf("] Apply fx on up sampled signal..."); //========================================================
+        fxChain(fxType, outputUp, NB_SAMPLES_OUT);
+        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(8, "in-ovSmpUp(poly)-fx-out", SR_OUT, FACTOR), SR_OUT);
+        printf("done\n");
+    }
+    
+    if (testActive) {
+        printf("] Downsample signal..."); //====================================================================
+        decimate(outputUp, outputDown, NB_SAMPLES_IN);
+        writeFloatSound(NB_SAMPLES_IN, outputDown, buildOutputFile(9, "in-ovSmpUp(poly)-fx-Down-out", SR_IN, FACTOR), SR_IN);
+        printf("done\n");
+    }
+    
+    printf("] Feed 10khz + waveshaper into oversampler (up/down)..."); //=======================================
+    
     delete [] outputUp;
-    delete [] output;
+    delete [] outputDown;
+    
+    float* outputWaveShaper = new float[NB_SAMPLES_IN];
+    float* outputWaveShaperCascade = new float[NB_SAMPLES_IN];
+    
+    stOver2x.reset();
+    stOver4x.reset();
+    
+    osc.setFrequency(10000, SR_IN);
+    float gain = pow(10.0, -6 / 20.0); // in -6db
+    fxType = WAVESHAPER;
+    
+    StOversampler2x stOver2xCascade;
+    
+    for (int i = 0; i < NB_SAMPLES_IN; i++) {
+        float in = osc.tick() * gain;
+        
+        if (FACTOR == 2) {
+            stOver2x.up2(in);
+            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
+            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            outputWaveShaper[i] = stOver2x.down2();
+        } else if (FACTOR == 4) {
+            stOver4x.up4(in);
+            stOver4x.y3 = fxChain(fxType, stOver4x.y3);
+            stOver4x.y2 = fxChain(fxType, stOver4x.y2);
+            stOver4x.y1 = fxChain(fxType, stOver4x.y1);
+            stOver4x.y0 = fxChain(fxType, stOver4x.y0);
+            outputWaveShaper[i] = stOver4x.down4();
+            
+            stOver2xCascade.up2(in);
+            
+            stOver2x.up2(stOver2xCascade.y1);
+            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
+            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            stOver2xCascade.y1 = stOver2x.down2();
+            
+            stOver2x.up2(stOver2xCascade.y0);
+            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
+            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            stOver2xCascade.y0 = stOver2x.down2();
+
+            outputWaveShaperCascade[i] = stOver2xCascade.down2();
+        }
+    }
+    
+    writeFloatSound(NB_SAMPLES_IN, outputWaveShaper, buildOutputFile(10, "in-ovSmp-wvshaper-out", SR_IN, FACTOR), SR_IN);
+    
+    if (FACTOR == 4) {
+        writeFloatSound(NB_SAMPLES_IN, outputWaveShaper, buildOutputFile(11, "in-ovSmp-cascade-wvshaper-out", SR_IN, FACTOR), SR_IN);
+    }
+    
+    printf("done\n");
+
+    delete [] outputWaveShaper;
+    delete [] outputWaveShaperCascade;
 }

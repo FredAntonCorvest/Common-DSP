@@ -1,4 +1,5 @@
 #! /bin/bash
 echo BUILD
+rm FacOversampler
 g++ FacOversampler.cpp -o FacOversampler
-./FacOversampler
+./FacOversampler $1
