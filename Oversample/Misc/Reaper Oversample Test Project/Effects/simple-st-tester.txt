@@ -5,19 +5,21 @@ desc:sault/fac :: oversampler tester
 // DO NOT JUDGE THE ST OVERSAMPLER BASED ON THE RESULT PROVIDED BY THIS TEST!!!
 
 slider1:1000<20,20000,1>Freq (Hz)
-slider2:1<0,4,1{1x (none),2x(Up sampling only),4x(Up sampling only),2x-2x,4x-4x}> Filter to test
+slider2:1<0,6,1{1x (none),2x(Up sampling only),3x(Up sampling only),4x(Up sampling only),2x-2x,3x-3x,4x-4x}> Filter to test
 slider3:15<1,100,1> Osc # harmonics
 slider4:0<0,2,1{ALL,ODD ONLY}> Osc harmonics
-slider5:0<0,2,1{Dry,Hard Clip, ATan WaveShaper}> Fx
+slider5:.5<0,1,.01> Osc Level
+slider6:0<0,2,1{Dry,Hard Clip, ATan WaveShaper}> Fx
 
 import st-oversampler.jsfx-inc
 
 @init
+osc.level = .5;
 osc.ph = 0;
 counter = 0;
 twopi = 2 * $pi;
 
-function Osc() instance(y,dt,ph,nbHarmonics,stepHarmonics) (
+function Osc() instance(y,dt,ph,nbHarmonics,stepHarmonics,level) (
   y = 0;
   a = ph*twopi;
   step = 1;
@@ -27,7 +29,7 @@ function Osc() instance(y,dt,ph,nbHarmonics,stepHarmonics) (
   ); 
   ph += dt; 
   ph >= 1 ? ph -= 1;
-  y;
+  y*level;
 );
 
 function HardClip(x) (
@@ -39,26 +41,34 @@ function WaveShaper(x) (
 );
 
 function FxChain(x)(
-  slider5 == 0 ? (
+  slider6 == 0 ? (
     x;
   ) :
 
-  slider5 == 1 ? ( 
+  slider6 == 1 ? ( 
     HardClip(x);
   ) :
   
-  slider5 == 2 ? ( 
+  slider6 == 2 ? ( 
     WaveShaper(x);
   );  
 );
 
 @slider
 
-factor = slider2 == 0 || slider2 >= 3 ? 1 : 1 / (slider2*2);
+slider2 == 0 ? factor = 1;
+slider2 == 1 ? factor = 1/2;
+slider2 == 2 ? factor = 1/3;
+slider2 == 3 ? factor = 1/4;
+slider2 == 4 ? factor = 1;
+slider2 == 5 ? factor = 1;
+slider2 == 6 ? factor = 1;
+
 osc.sr = srate*factor;
 osc.dt = slider1/osc.sr;
 osc.nbHarmonics = slider3;
 osc.stepHarmonics = slider4+1;
+osc.level = slider5;
 
 @sample
 
@@ -79,8 +89,23 @@ slider2 == 1 ? (
     counter += 1;
     counter >= 2 ? counter = 0;
     );
-
+    
 slider2 == 2 ? (
+
+  counter == 0 ? (
+    os5.os_up3( osc.Osc() );
+    
+    spl0 = spl1 = FxChain(os5.y2);
+    );
+
+  counter == 1 ? ( spl0 = spl1 = FxChain(os5.y1); );
+  counter == 2 ? ( spl0 = spl1 = FxChain(os5.y0); );
+
+  counter += 1;
+  counter >= 3 ? counter -= 3;
+  );    
+
+slider2 == 3 ? (
 
   counter == 0 ? (
     os1.os_up2( osc.Osc() );
@@ -99,7 +124,7 @@ slider2 == 2 ? (
   counter >= 4 ? counter = 0;
   );
   
-slider2 == 3 ? (
+slider2 == 4 ? (
 
   os0.os_up2( osc.Osc(); );
   os0.y1 = FxChain(os0.y1);
@@ -108,7 +133,17 @@ slider2 == 3 ? (
 
   );
   
-slider2 == 4 ? (
+slider2 == 5 ? (
+
+  os6.os_up3( osc.Osc() );
+  os6.y2 = FxChain(os6.y2);
+  os6.y1 = FxChain(os6.y1);
+  os6.y0 = FxChain(os6.y0);  
+  spl0 = spl1 = os6.os_down3();
+
+  );  
+  
+slider2 == 6 ? (
 
   os4.os_up4( osc.Osc(); );
   os4.y3 = FxChain(os4.y3);
