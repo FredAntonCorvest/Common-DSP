@@ -1,4 +1,4 @@
-<REAPER_PROJECT 0.1 "5.32/OSX64" 1488226933
+<REAPER_PROJECT 0.1 "5.32/OSX64" 1488357931
   RIPPLE 0
   GROUPOVERRIDE 0 0 0
   AUTOXFADE 1
@@ -14,7 +14,7 @@
   VIDEO_CONFIG 0 0 256
   PANMODE 3
   CURSOR 42
-  ZOOM 100 4698 0
+  ZOOM 100 4118 0
   VZOOMEX 6
   USE_REC_CFG 0
   RECMODE 1
@@ -69,15 +69,15 @@
   MASTER_FX 1
   MASTER_SEL 0
   <MASTERFXLIST
-    WNDRECT 288 538 688 269
+    WNDRECT 288 475 688 332
     SHOW 1
     LASTSEL 0
     DOCKED 0
     BYPASS 0 0 0
     <JS <Project>/simple-st-tester.txt ""
-      1000.000000 1.000000 15.000000 0.000000 0.500000 0.000000 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+      0.000000 0.000000 1000.000000 15.000000 0.000000 0.500000 0.000000 - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
     >
-    JS_DIMS 449 219
+    JS_DIMS 449 282
     FLOATPOS 320 534 449 241
     FXID {5AF1567E-832B-034C-A18F-8AFDFE29643E}
     WAK 0
