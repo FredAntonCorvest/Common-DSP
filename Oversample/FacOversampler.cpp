@@ -30,8 +30,7 @@
 #include "FacPolyphase.hpp"
 #include "StOversampler2x.hpp"
 #include "StOversampler4x.hpp"
-#include "Factor2Filter.hpp"
-#include "Factor4Filter.hpp"
+#include "BandLimit.h"
 
 enum FX_TYPE {NONE, HARD_CLIP, WAVESHAPER};
 
@@ -58,7 +57,7 @@ void fxChain(FX_TYPE fxType, float* input, int inSamples) {
 
 std::string buildOutputFile(int pos, const std::string& text, int sr, int factor) {
     char buff[255];
-    snprintf(buff, sizeof(buff), "Data/%d-%s(%dhz-Factor%d).wav", pos, text.c_str(), sr, factor);
+    snprintf(buff, sizeof(buff), "Data/%02d-%s[x%d].wav", pos, text.c_str(), factor);
     return buff;
 }
 
@@ -97,15 +96,12 @@ int main(int argc,char *argv[]) {
     float* bufferOsc = new float[NB_SAMPLES_IN];
     float* bufferUpSamp = new float[NB_SAMPLES_OUT];
     float* bufferFilter = new float[NB_SAMPLES_OUT];
+    float* bufferFilterDown = new float[NB_SAMPLES_IN];
     
     StOversampler2x stOver2x;
     StOversampler4x stOver4x;
     
-    factor2Filter filter2x;
-    factor2Filter_init(&filter2x);
-    
-    factor4Filter filter4x;
-    factor4Filter_init(&filter4x);
+    CHalfBandFilter* upFilter = new CHalfBandFilter(12, true);
     
     printf("] Feed signal into oversampler (up only)..."); //=========================================================
     
@@ -119,48 +115,51 @@ int main(int argc,char *argv[]) {
         
         if (FACTOR == 2) {
             stOver2x.up2(x);
-            bufferUpSamp[i] = stOver2x.y1;
-            bufferUpSamp[i+1] = stOver2x.y0;
-            
-            factor2Filter_put(&filter2x, x * FACTOR);
-            bufferFilter[i] = factor2Filter_get(&filter2x) ;
-            for(int a=1; a < FACTOR; ++a) {
-                factor2Filter_put(&filter2x, 0);
-                bufferFilter[i+a] = factor2Filter_get(&filter2x);
-            }
-            
+            bufferUpSamp[i] = stOver2x.getY1();
+            bufferUpSamp[i+1] = stOver2x.getY0();
         } else if (FACTOR == 4) {
             stOver4x.up4(x);
-            bufferUpSamp[i]   = stOver4x.y3;
-            bufferUpSamp[i+1] = stOver4x.y2;
-            bufferUpSamp[i+2] = stOver4x.y1;
-            bufferUpSamp[i+3] = stOver4x.y0;
-            
-            factor4Filter_put(&filter4x, x * FACTOR);
-            bufferFilter[i] = factor4Filter_get(&filter4x) ;
-            for(int a=1; a < FACTOR; ++a) {
-                factor4Filter_put(&filter4x, 0);
-                bufferFilter[i+a] = factor4Filter_get(&filter4x);
-            }
-   
+            bufferUpSamp[i]   = stOver4x.getY3();
+            bufferUpSamp[i+1] = stOver4x.getY2();
+            bufferUpSamp[i+2] = stOver4x.getY1();
+            bufferUpSamp[i+3] = stOver4x.getY0();
+        }
+        
+        bufferFilter[i] = upFilter->process(x * FACTOR) ;
+        // TODO: cascade for FACTOR 4
+        for(int a=1; a < FACTOR; ++a) {
+            bufferFilter[i+a] = upFilter->process(0);
         }
         
         bufferOsc[idx] = x;
     }
     
-    writeFloatSound(NB_SAMPLES_IN, bufferOsc, buildOutputFile(0, "in-out", SR_IN, FACTOR), SR_IN);
-    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(2, "in-ovSmpUp-out", SR_OUT, FACTOR), SR_OUT);
-    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(3, "in-filter-out", SR_OUT, FACTOR), SR_OUT);
+    delete upFilter;
+    
+    writeFloatSound(NB_SAMPLES_IN, bufferOsc, buildOutputFile(0, "dry", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(2, "xUp", SR_OUT, FACTOR), SR_OUT);
+    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(3, "hFltUp", SR_OUT, FACTOR), SR_OUT);
     
     printf("done\n] Apply fx on up sampled signal..."); //============================================================
     
-    for (int i = 0; i < NB_SAMPLES_OUT; i++) {
+    CHalfBandFilter* downFilter = new CHalfBandFilter(12, true);
+    
+    for (int i = 0, idx = 0; i < NB_SAMPLES_OUT; i++) {
         bufferFilter[i] = fxChain(fxType, bufferFilter[i]);
         bufferUpSamp[i] = fxChain(fxType, bufferUpSamp[i]);
+        
+        float y = downFilter->process(fxChain(fxType, bufferFilter[i]));
+        // TODO: cascade for FACTOR 4
+        if (i == 0 || i % FACTOR == 0) {
+            bufferFilterDown[idx++] = y;
+        }
     }
     
-    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(4, "in-ovSmpUp-fx-out", SR_OUT, FACTOR), SR_OUT);
-    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(5, "in-filter-fx-out", SR_OUT, FACTOR), SR_OUT);
+    delete downFilter;
+    
+    writeFloatSound(NB_SAMPLES_OUT, bufferUpSamp, buildOutputFile(4, "xUp-fx", SR_OUT, FACTOR), SR_OUT);
+    writeFloatSound(NB_SAMPLES_OUT, bufferFilter, buildOutputFile(5, "hFltUp-fx", SR_OUT, FACTOR), SR_OUT);
+    writeFloatSound(NB_SAMPLES_OUT, bufferFilterDown, buildOutputFile(7, "hFltFxDw", SR_IN, FACTOR), SR_IN);
     
     printf("done\n] Feed signal into oversampler (up/down)..."); //===================================================
     
@@ -192,27 +191,28 @@ int main(int argc,char *argv[]) {
         
         if (FACTOR == 2) {
             stOver2x.up2(in);
-            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
-            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            stOver2x.setY1(fxChain(fxType, stOver2x.getY1()));
+            stOver2x.setY0(fxChain(fxType, stOver2x.getY0()));
             bufferOvSampFx[i] = stOver2x.down2();
         } else if (FACTOR == 4) {
             stOver4x.up4(in);
-            stOver4x.y3 = fxChain(fxType, stOver4x.y3);
-            stOver4x.y2 = fxChain(fxType, stOver4x.y2);
-            stOver4x.y1 = fxChain(fxType, stOver4x.y1);
-            stOver4x.y0 = fxChain(fxType, stOver4x.y0);
+            stOver4x.setY3(fxChain(fxType, stOver4x.getY3()));
+            stOver4x.setY2(fxChain(fxType, stOver4x.getY2()));
+            stOver4x.setY1(fxChain(fxType, stOver4x.getY1()));
+            stOver4x.setY0(fxChain(fxType, stOver4x.getY0()));
             bufferOvSampFx[i] = stOver4x.down4();
         }
     }
     
-    writeFloatSound(NB_SAMPLES_IN, bufferOvSamp, buildOutputFile(1, "in-ovSmp-out", SR_IN, FACTOR), SR_IN);
-    writeFloatSound(NB_SAMPLES_IN, bufferOvSampFx, buildOutputFile(6, "in-ovSmp-fx-out", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_IN, bufferOvSamp, buildOutputFile(1, "xUpDw", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_IN, bufferOvSampFx, buildOutputFile(6, "xUpFxDw", SR_IN, FACTOR), SR_IN);
     
     delete [] bufferOsc;
     delete [] bufferFilter;
     delete [] bufferUpSamp;
     delete [] bufferOvSamp;
     delete [] bufferOvSampFx;
+    delete [] bufferFilterDown;
     
     float* outputUp = new float[NB_SAMPLES_OUT];
     float* outputDown = new float[NB_SAMPLES_IN];
@@ -222,7 +222,7 @@ int main(int argc,char *argv[]) {
     if (testActive) {
         printf("done\n] Feed signal into oversampler (polyphase) (up only)..."); //===================================
         interpolate(bufferOsc, outputUp, NB_SAMPLES_IN);
-        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(7, "in-ovSmpUp(poly)-out", SR_OUT, FACTOR), SR_OUT);
+        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(10, "xUp(poly)", SR_OUT, FACTOR), SR_OUT);
         printf("done\n");
     } else {
         printf("done\n] Test on oversampler (polyphase) ignored. Factor is %d, NBand is %d\n", FACTOR, mNumBranches);
@@ -231,14 +231,14 @@ int main(int argc,char *argv[]) {
     if (testActive) {
         printf("] Apply fx on up sampled signal..."); //========================================================
         fxChain(fxType, outputUp, NB_SAMPLES_OUT);
-        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(8, "in-ovSmpUp(poly)-fx-out", SR_OUT, FACTOR), SR_OUT);
+        writeFloatSound(NB_SAMPLES_OUT, outputUp, buildOutputFile(11, "xUpFx(poly)", SR_OUT, FACTOR), SR_OUT);
         printf("done\n");
     }
     
     if (testActive) {
         printf("] Downsample signal..."); //====================================================================
         decimate(outputUp, outputDown, NB_SAMPLES_IN);
-        writeFloatSound(NB_SAMPLES_IN, outputDown, buildOutputFile(9, "in-ovSmpUp(poly)-fx-Down-out", SR_IN, FACTOR), SR_IN);
+        writeFloatSound(NB_SAMPLES_IN, outputDown, buildOutputFile(12, "xUpFxDw(poly)", SR_IN, FACTOR), SR_IN);
         printf("done\n");
     }
     
@@ -264,37 +264,37 @@ int main(int argc,char *argv[]) {
         
         if (FACTOR == 2) {
             stOver2x.up2(in);
-            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
-            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
+            stOver2x.setY1(fxChain(fxType, stOver2x.getY1()));
+            stOver2x.setY0(fxChain(fxType, stOver2x.getY0()));
             outputWaveShaper[i] = stOver2x.down2();
         } else if (FACTOR == 4) {
             stOver4x.up4(in);
-            stOver4x.y3 = fxChain(fxType, stOver4x.y3);
-            stOver4x.y2 = fxChain(fxType, stOver4x.y2);
-            stOver4x.y1 = fxChain(fxType, stOver4x.y1);
-            stOver4x.y0 = fxChain(fxType, stOver4x.y0);
+            stOver4x.setY3(fxChain(fxType, stOver4x.getY3()));
+            stOver4x.setY2(fxChain(fxType, stOver4x.getY2()));
+            stOver4x.setY1(fxChain(fxType, stOver4x.getY1()));
+            stOver4x.setY0(fxChain(fxType, stOver4x.getY0()));
             outputWaveShaper[i] = stOver4x.down4();
             
             stOver2xCascade.up2(in);
             
-            stOver2x.up2(stOver2xCascade.y1);
-            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
-            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
-            stOver2xCascade.y1 = stOver2x.down2();
+            stOver2x.up2(stOver2xCascade.getY1());
+            stOver2x.setY1(fxChain(fxType, stOver2x.getY1()));
+            stOver2x.setY0(fxChain(fxType, stOver2x.getY0()));
+            stOver2xCascade.setY1(stOver2x.down2());
             
-            stOver2x.up2(stOver2xCascade.y0);
-            stOver2x.y1 = fxChain(fxType, stOver2x.y1);
-            stOver2x.y0 = fxChain(fxType, stOver2x.y0);
-            stOver2xCascade.y0 = stOver2x.down2();
-
+            stOver2x.up2(stOver2xCascade.getY0());
+            stOver2x.setY1(fxChain(fxType, stOver2x.getY1()));
+            stOver2x.setY0(fxChain(fxType, stOver2x.getY0()));
+            stOver2xCascade.setY0(stOver2x.down2());
+            
             outputWaveShaperCascade[i] = stOver2xCascade.down2();
         }
     }
     
-    writeFloatSound(NB_SAMPLES_IN, outputWaveShaper, buildOutputFile(10, "in-ovSmp-wvshaper-out", SR_IN, FACTOR), SR_IN);
+    writeFloatSound(NB_SAMPLES_IN, outputWaveShaper, buildOutputFile(20, "xUpWshpDw", SR_IN, FACTOR), SR_IN);
     
     if (FACTOR == 4) {
-        writeFloatSound(NB_SAMPLES_IN, outputWaveShaper, buildOutputFile(11, "in-ovSmp-cascade-wvshaper-out", SR_IN, FACTOR), SR_IN);
+        writeFloatSound(NB_SAMPLES_IN, outputWaveShaperCascade, buildOutputFile(21, "xUpWshpDw-Cascade-", SR_IN, FACTOR), SR_IN);
     }
     
     printf("done\n");

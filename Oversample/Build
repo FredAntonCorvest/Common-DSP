@@ -1,5 +1,8 @@
 #! /bin/bash
 echo BUILD
-rm FacOversampler
-g++ FacOversampler.cpp -o FacOversampler
-./FacOversampler $1
+rm Bin/FacOversampler
+g++ -c BandLimit.cpp
+g++ -std=c++11 -c FacOversampler.cpp
+g++ -o FacOversampler BandLimit.o FacOversampler.o
+mv FacOversampler Bin/FacOversampler
+./Bin/FacOversampler $1
